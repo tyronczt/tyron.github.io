@@ -1,0 +1,56 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.GH_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install pnpm
+        uses: pnpm/setup-pnpm@v1
+        with:
+          version: 10
+      
+      - name: Install dependencies
+        run: pnpm install
+      
+      - name: Install theme
+        run: |
+          cd themes
+          curl -L --connect-timeout 30 --max-time 300 -o mic_theme.zip "https://api.github.com/repos/miccall/hexo-theme-Mic_Theme/zipball"
+          unzip -o mic_theme.zip
+          rm -rf miccall
+          mv miccall-hexo-theme-Mic_Theme-* miccall
+          rm -f mic_theme.zip
+          cd ..
+      
+      - name: Generate static files
+        run: pnpm hexo generate
+      
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: root
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            rm -rf /var/www/html/*
+            cp -r /root/.openclaw/workspace/hexo-source/public/* /var/www/html/
+            chown -R www-data:www-data /var/www/html/
